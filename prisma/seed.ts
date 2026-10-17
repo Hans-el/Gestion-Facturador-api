@@ -45,6 +45,17 @@ async function main() {
     });
   }
   console.log(`Categorías: ${CATEGORIES.length}`);
+
+  await prisma.customer.upsert({
+    where: { idNumber: "9999999999999" },
+    update: {},
+    create: {
+      idType: "CONSUMIDOR_FINAL",
+      idNumber: "9999999999999",
+      name: "CONSUMIDOR FINAL",
+    },
+  });
+  console.log("Cliente: Consumidor final");
 }
 
 main()

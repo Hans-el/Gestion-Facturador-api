@@ -39,6 +39,8 @@ model User {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   stockMovements   StockMovement[]
+  sales            Sale[]           @relation("SaleSeller")
+  voidedSales      Sale[]           @relation("SaleVoidedBy")
 
   @@index([role])
 }
@@ -81,6 +83,7 @@ model Product {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   movements   StockMovement[]
+  saleItems   SaleItem[]
 
   @@index([categoryId])
   @@index([name])
@@ -112,4 +115,135 @@ model StockMovement {
   @@index([productId, createdAt])
   @@index([createdAt])
   @@index([type])
+}
+
+// Para facturacion
+// Códigos del SRI: CEDULA=05, RUC=04, PASAPORTE=06, CONSUMIDOR_FINAL=07, EXTERIOR=08
+enum IdentificationType {
+  CEDULA
+  RUC
+  PASAPORTE
+  CONSUMIDOR_FINAL
+  EXTERIOR
+}
+
+model Customer {
+  id        String             @id @default(uuid())
+  idType    IdentificationType
+  idNumber  String             @unique
+  name      String // nombres y apellidos, o razón social
+  email     String?
+  phone     String?
+  address   String?
+  isActive  Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  sales     Sale[]
+
+  @@index([name])
+}
+
+//para modulo de ventas
+enum SaleStatus {
+  COMPLETED
+  VOIDED
+}
+
+// Equivalencias con el SRI (se confirman al integrar la facturación):
+// EFECTIVO=01, TARJETA_DEBITO=16, TARJETA_CREDITO=19, TRANSFERENCIA=20
+enum PaymentMethod {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA_DEBITO
+  TARJETA_CREDITO
+}
+
+enum DiscountType {
+  PERCENT
+  AMOUNT
+}
+
+model Sale {
+  id     String     @id @default(uuid())
+  number Int        @unique @default(autoincrement()) // número interno; el de la factura vendrá aparte
+  status SaleStatus @default(COMPLETED)
+
+  customerId       String
+  customer         Customer           @relation(fields: [customerId], references: [id])
+  // Copia de los datos del cliente al momento de la venta
+  customerIdType   IdentificationType
+  customerIdNumber String
+  customerName     String
+  customerEmail    String?
+  customerPhone    String?
+  customerAddress  String?
+
+  userId String
+  user   User   @relation("SaleSeller", fields: [userId], references: [id])
+
+  subtotal            Decimal       @db.Decimal(12, 2) // cantidad × precio, antes de descuentos
+  discountTotal       Decimal       @db.Decimal(12, 2) // descuentos de línea + descuento general
+  globalDiscountType  DiscountType?
+  globalDiscountValue Decimal?      @db.Decimal(12, 2)
+  taxableBase         Decimal       @db.Decimal(12, 2) // subtotal − descuentos (total sin impuestos)
+  ivaTotal            Decimal       @db.Decimal(12, 2)
+  total               Decimal       @db.Decimal(12, 2)
+
+  notes String?
+
+  voidedAt   DateTime?
+  voidReason String?
+  voidedById String?
+  voidedBy   User?     @relation("SaleVoidedBy", fields: [voidedById], references: [id])
+
+  items    SaleItem[]
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([status])
+}
+
+model SaleItem {
+  id       String @id @default(uuid())
+  saleId   String
+  sale     Sale   @relation(fields: [saleId], references: [id])
+  position Int // orden de la línea en la venta
+
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  // Copia del producto al momento de la venta
+  productCode String
+  productName String
+  unit        String
+
+  quantity            Decimal       @db.Decimal(12, 3)
+  unitPrice           Decimal       @db.Decimal(12, 2)
+  discountType        DiscountType?
+  discountValue       Decimal?      @db.Decimal(12, 2)
+  lineDiscount        Decimal       @default(0) @db.Decimal(12, 2) // descuento de la línea (calculado)
+  globalDiscountShare Decimal       @default(0) @db.Decimal(12, 2) // parte del descuento general
+  taxableBase         Decimal       @db.Decimal(12, 2) // cantidad × precio − descuentos
+  ivaRate             IvaRate
+  ivaPercent          Decimal       @db.Decimal(5, 2)
+  ivaAmount           Decimal       @db.Decimal(12, 2)
+  total               Decimal       @db.Decimal(12, 2)
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  saleId    String
+  sale      Sale          @relation(fields: [saleId], references: [id])
+  method    PaymentMethod
+  amount    Decimal       @db.Decimal(12, 2)
+  reference String? // nº de transferencia, voucher de tarjeta, etc.
+  createdAt DateTime      @default(now())
+
+  @@index([saleId])
 }

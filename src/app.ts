@@ -8,6 +8,7 @@ import { authRoutes } from "./modules/auth/auth.routes.js";
 import { productRoutes } from "./modules/products/products.routes.js";
 import { categoryRoutes } from "./modules/categories/categories.routes.js";
 import { inventoryRoutes } from "./modules/inventory/inventory.routes.js";
+import { customerRoutes } from "./modules/customers/customers.routes.js";
 
 export const app = express();
 
@@ -26,6 +27,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/api/customers", customerRoutes);
 
 // Siempre al final
 app.use(notFoundHandler);

@@ -36,6 +36,7 @@ interface ApplyMovementInput {
   reason?: string | null;
   reference?: string | null;
   userId: string;
+  allowInactive?: boolean; // las anulaciones pueden devolver stock a productos dados de baja
 }
 
 // Debe ejecutarse dentro de una transacción (tx)
@@ -55,8 +56,9 @@ export async function applyMovement(
 
   const product = rows[0];
   if (!product) throw notFound("Producto no encontrado");
-  if (!product.isActive)
+  if (!product.isActive && !input.allowInactive) {
     throw badRequest(`"${product.name}" está dado de baja`);
+  }
 
   const stockBefore = new Prisma.Decimal(product.stock);
   const stockAfter =
