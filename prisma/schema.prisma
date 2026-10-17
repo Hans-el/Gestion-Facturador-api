@@ -1,0 +1,115 @@
+// generar el cliente de Prisma. Si usamos prisma-client-js, debemos usar el import de la carpeta generada, no de @prisma/client
+// Si usamos  
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  VENDEDOR
+  BODEGUERO
+  CONTADOR
+}
+
+// Tarifas de IVA del SRI (Ecuador).
+// Más adelante, en facturación, las mapearemos a los códigos del SRI.
+enum IvaRate {
+  IVA_0
+  IVA_5
+  IVA_12
+  IVA_13
+  IVA_14
+  IVA_15
+  NO_OBJETO
+  EXENTO
+}
+
+model User {
+  id               String           @id @default(uuid())
+  email            String           @unique
+  name             String
+  passwordHash     String
+  role             Role
+  isActive         Boolean          @default(true)
+  extraPermissions UserPermission[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  stockMovements   StockMovement[]
+
+  @@index([role])
+}
+
+// Permisos adicionales a los que ya da el rol.
+// Formato de "permission": "modulo:accion", por ejemplo "products:edit"
+model UserPermission {
+  id         String @id @default(uuid())
+  userId     String
+  permission String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permission])
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id          String          @id @default(uuid())
+  code        String          @unique
+  name        String
+  description String?
+  categoryId  String
+  category    Category        @relation(fields: [categoryId], references: [id])
+  unit        String          @default("UNIDAD")
+  price       Decimal         @db.Decimal(12, 2)
+  cost        Decimal         @default(0) @db.Decimal(12, 2)
+  ivaRate     IvaRate         @default(IVA_15)
+  stock       Decimal         @default(0) @db.Decimal(12, 3)
+  minStock    Decimal         @default(0) @db.Decimal(12, 3)
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  movements   StockMovement[]
+
+  @@index([categoryId])
+  @@index([name])
+}
+
+enum MovementType {
+  ENTRADA // ingreso de mercadería
+  SALIDA // merma, daño, consumo interno
+  AJUSTE // corrección por conteo físico
+  VENTA // lo genera el módulo de ventas
+  ANULACION // reversa de una venta anulada (módulo de ventas)
+}
+
+// Libro de movimientos: nunca se edita ni se borra
+model StockMovement {
+  id          String       @id @default(uuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  type        MovementType
+  quantity    Decimal      @db.Decimal(12, 3) // con signo: positivo entra, negativo sale
+  stockBefore Decimal      @db.Decimal(12, 3)
+  stockAfter  Decimal      @db.Decimal(12, 3)
+  reason      String?
+  reference   String? // factura del proveedor, nota, etc.
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  createdAt   DateTime     @default(now())
+
+  @@index([productId, createdAt])
+  @@index([createdAt])
+  @@index([type])
+}
